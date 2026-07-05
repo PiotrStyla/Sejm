@@ -25,3 +25,6 @@ datasets/
 .vscode/
 .idea/
 *.swp
+
+# Downloaded local tools
+tools_bin/
