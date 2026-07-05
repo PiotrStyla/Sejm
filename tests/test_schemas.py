@@ -1,9 +1,11 @@
-"""Basic tests for data models and stenogram parsing."""
+"""Basic tests for data models, stenogram parsing, and Sejm API client."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from sejm_dataset_agent.agents.stenogram_parser import StenogramParserAgent
 from sejm_dataset_agent.models.schemas import Event, Speech, Segment
+from sejm_dataset_agent.tools.sejm_api import SejmApiClient
 
 
 def test_speech_dataclass():
@@ -41,3 +43,43 @@ Marszałek Sejmu Witold Piotr Sławomir: Przystępujemy do głosowania.
     assert len(speeches) == 3
     assert speeches[0].speaker == "Witold Piotr Sławomir"
     assert "Oklaski" in [e.label for e in speeches[1].events]
+
+
+def test_api_client_finds_proceeding_for_date():
+    client = SejmApiClient()
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {"number": 1, "dates": ["2023-12-13"], "title": "Posiedzenie 1"},
+        {"number": 2, "dates": ["2024-01-16", "2024-01-17"], "title": "Posiedzenie 2"},
+    ]
+    mock_response.raise_for_status.return_value = None
+
+    with patch.object(client.session, "get", return_value=mock_response):
+        proceeding = client.find_proceeding_for_date("10", "2024-01-17")
+
+    assert proceeding is not None
+    assert proceeding["number"] == 2
+
+
+def test_api_client_finds_plenary_video():
+    client = SejmApiClient()
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "title": "Komisja",
+            "type": "komisja",
+            "videoLink": "https://example.com/komisja.m3u8",
+        },
+        {
+            "title": "Posiedzenie",
+            "type": "posiedzenie",
+            "videoLink": "https://example.com/posiedzenie.m3u8",
+        },
+    ]
+    mock_response.raise_for_status.return_value = None
+
+    with patch.object(client.session, "get", return_value=mock_response):
+        video = client.find_plenary_video("10", "2024-01-17")
+
+    assert video is not None
+    assert video["type"] == "posiedzenie"

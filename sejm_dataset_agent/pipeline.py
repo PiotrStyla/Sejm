@@ -32,7 +32,7 @@ def run_pipeline(
     raw_dir = output_dir / "raw"
     work_dir = output_dir / "work"
 
-    scraper = SejmScraperAgent(base_url=settings.sejm_base_url)
+    scraper = SejmScraperAgent(settings=settings)
     proceedings = scraper.run(date=date, term=term, raw_dir=raw_dir)
 
     if not proceedings.video_path or not proceedings.stenogram_path:

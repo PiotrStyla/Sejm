@@ -49,6 +49,21 @@ Skopiuj `.env.example` do `.env` i dostosuj:
 cp .env.example .env
 ```
 
+## Źródła danych
+
+Agent domyślnie korzysta z **oficjalnego API Sejmu** (`api.sejm.gov.pl`), które zwraca:
+
+- Listę transmisji wideo dla danego dnia (`/sejm/term{term}/videos/{date}`).
+- Metadane i teksty wypowiedzi ze stenogramu (`/sejm/term{term}/proceedings/{id}/{date}/transcripts`).
+- Bezpośrednie linki do strumieni wideo (HLS/m3u8), pobieranych przez `ffmpeg`.
+
+Jeśli API zawiedzie lub nie ma danych dla wybranej daty, agent automatycznie wraca do scrapowania strony `sejm.gov.pl`. Źródło można wymusić w `.env`:
+
+```env
+DATA_SOURCE=api      # oficjalne API Sejmu
+DATA_SOURCE=scrape   # bezpośrednie scrapowanie strony
+```
+
 ## Uwaga prawna
 
 Materiały sejmowe są własnością publiczną. Projekt używa wyłącznie oficjalnych źródeł Kancelarii Sejmu.
