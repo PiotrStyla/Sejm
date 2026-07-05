@@ -68,7 +68,12 @@ class SejmApiClient:
         """Return the HTML body of a single statement."""
         path = f"sejm/term{term}/proceedings/{proceeding_num}/{date}/transcripts/{statement_num}"
         url = urljoin(self.base_url + "/", path)
-        response = self.session.get(url, timeout=30)
+        # The statement endpoint returns HTML and requires a text/html Accept header.
+        response = self.session.get(
+            url,
+            timeout=30,
+            headers={"Accept": "text/html"},
+        )
         response.raise_for_status()
         return response.text
 
