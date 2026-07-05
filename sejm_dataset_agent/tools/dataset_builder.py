@@ -72,6 +72,44 @@ def build_speaker_dataset(segments: Iterable[Segment], output_path: Path) -> Pat
     return output_path
 
 
+def build_speeches_corpus_dataset(
+    speeches: Iterable[Speech],
+    output_path: Path,
+    date: str,
+    term: str,
+    source_url: str,
+) -> Path:
+    """Write the raw stenogram speeches as a general-purpose text corpus.
+
+    This is the primary CPT/SFT-shaped asset: one JSONL record per speech,
+    with metadata for provenance and downstream quality auditing.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with open(output_path, "w", encoding="utf-8") as f:
+        for speech in speeches:
+            if not speech.text.strip():
+                continue
+            json.dump(
+                {
+                    "text": speech.text,
+                    "speaker": speech.speaker,
+                    "date": date,
+                    "term": term,
+                    "source_url": source_url,
+                    "char_count": len(speech.text),
+                    "word_count": len(speech.text.split()),
+                    "has_events": bool(speech.events),
+                },
+                f,
+                ensure_ascii=False,
+            )
+            f.write("\n")
+            count += 1
+    logger.info("Speeches corpus dataset written to %s (%d records)", output_path, count)
+    return output_path
+
+
 def build_qa_dataset(speeches: Iterable[Speech], output_path: Path) -> Path:
     """Build a simple Q&A dataset from adjacent question/answer speeches.
 

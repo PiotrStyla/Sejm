@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -23,10 +24,13 @@ class Settings:
     min_segment_seconds: float = 2.0
     max_segment_seconds: float = 30.0
     output_dir: Path = Path("./datasets")
+    min_word_threshold: int = 50
+    reference_corpus_dir: Optional[Path] = None
 
 
 def load_settings() -> Settings:
     """Load settings from environment variables."""
+    reference_dir = os.getenv("REFERENCE_CORPUS_DIR", "")
     return Settings(
         sejm_base_url=os.getenv("SEJM_BASE_URL", "https://www.sejm.gov.pl/Sejm10.nsf"),
         sejm_api_base_url=os.getenv("SEJM_API_BASE_URL", "https://api.sejm.gov.pl"),
@@ -38,4 +42,6 @@ def load_settings() -> Settings:
         min_segment_seconds=float(os.getenv("MIN_SEGMENT_SECONDS", "2.0")),
         max_segment_seconds=float(os.getenv("MAX_SEGMENT_SECONDS", "30.0")),
         output_dir=Path(os.getenv("OUTPUT_DIR", "./datasets")),
+        min_word_threshold=int(os.getenv("MIN_WORD_THRESHOLD", "50")),
+        reference_corpus_dir=Path(reference_dir) if reference_dir else None,
     )

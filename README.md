@@ -40,6 +40,22 @@ Dla jednego dnia obrad agent wyprodukuje:
 - `speaker_dataset.csv` — identyfikacja mówców.
 - `events/` — pliki audio z oznaczonymi reakcjami sali.
 - `qa_dataset.json` — pary pytanie-odpowiedź z debat.
+- `speeches_corpus.jsonl` — surowy korpus wypowiedzi (główny zasób pod CPT/SFT).
+- `speeches_corpus_dataset_card.md` — karta datasetu (cel, źródło, licencja, pola).
+- `speeches_corpus_quality_report.md` — statystyki długości, wynik skanu PII, deduplikacja.
+- `speeches_corpus_slayer_readiness.md` — werdykt gotowości do treningu + kolejne kroki.
+- `speeches_corpus_review_sample.md` — próbka rekordów do ręcznego przeglądu.
+
+## Audyt jakości
+
+Każdy wygenerowany korpus tekstowy przechodzi automatyczny audyt (`QualityAuditorAgent`), zgodny z procesem stosowanym przez zespół Slayer (`github.com/slayerlabs`):
+
+- **Skan PII** — wykrywanie e-maili, numerów telefonów, numerów PESEL.
+- **Deduplikacja** — usuwanie dokładnych duplikatów tekstu.
+- **Filtr długości** — flagowanie rekordów poniżej `MIN_WORD_THRESHOLD` słów (domyślnie 50) — odpowiednik problemu "zbyt krótkie dokumenty" wykrytego dla ISAP.
+- **Dekontaminacja (opcjonalna)** — sprawdzenie nakładania n-gramów z lokalnym korpusem referencyjnym (`REFERENCE_CORPUS_DIR`), np. eksportem benchmarków LLMzSzŁ/PES/PoQuAD. Bez podanego korpusu referencyjnego audyt jasno oznacza dekontaminację jako niezweryfikowaną.
+
+Werdykt (`{dataset}_slayer_readiness.md`) jest blokujący, jeśli wykryto PII, nadmiar zbyt krótkich rekordów lub kontaminację — w przeciwnym razie dataset jest oznaczony jako gotowy do dalszej ewaluacji.
 
 ## Konfiguracja
 
