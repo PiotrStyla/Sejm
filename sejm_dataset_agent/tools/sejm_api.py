@@ -1,16 +1,58 @@
 """Official Sejm API client (api.sejm.gov.pl)."""
 
 import logging
+import re
 import subprocess
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urljoin
 
 import requests
+from bs4 import BeautifulSoup
 
 from ..models.schemas import RawProceedings
 
 logger = logging.getLogger(__name__)
+
+# Known non-speech event keywords found in parenthetical asides within
+# statement HTML, e.g. "(Oklaski)", "(Wesołość na sali)".
+_EVENT_KEYWORDS = [
+    "Oklaski",
+    "Wesołość na sali",
+    "Poruszenie na sali",
+    "Gwar na sali",
+    "Głosy z sali",
+    "Zebrani wstają",
+    "chwila ciszy",
+    "Dzwonek",
+]
+
+
+def _statement_html_to_text(html: str) -> str:
+    """Convert a single statement's HTML body into clean, line-based text.
+
+    Parenthetical asides matching known event keywords are converted to
+    bracket notation (e.g. "(Oklaski)" -> "[Oklaski]") so they can be
+    detected as standalone events by the stenogram parser.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    for tag in soup(["script", "style"]):
+        tag.decompose()
+    raw_text = soup.get_text(separator="\n", strip=True)
+
+    lines: list[str] = []
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        paren_match = re.fullmatch(r"\((.+)\)", line)
+        if paren_match and any(
+            kw.lower() in paren_match.group(1).lower() for kw in _EVENT_KEYWORDS
+        ):
+            lines.append(f"[{paren_match.group(1)}]")
+        else:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 class SejmApiClient:
@@ -80,7 +122,12 @@ class SejmApiClient:
     def build_stenogram_text(
         self, term: str, proceeding_num: int, date: str
     ) -> str:
-        """Build a single plain-text stenogram from all statements."""
+        """Build a single plain-text stenogram from all statements.
+
+        Each statement is prefixed with its speaker name (from statement
+        metadata) so the downstream StenogramParserAgent can recover
+        speaker attribution, e.g. "Marszałek: Wznawiam posiedzenie.".
+        """
         data = self.get_transcripts(term, proceeding_num, date)
         statements = data.get("statements", [])
         parts: list[str] = []
@@ -88,8 +135,27 @@ class SejmApiClient:
             num = statement.get("num")
             if num is None:
                 continue
-            html = self.get_statement_html(term, proceeding_num, date, num)
-            parts.append(html)
+            speaker = statement.get("name", "").strip()
+            try:
+                html = self.get_statement_html(term, proceeding_num, date, num)
+            except requests.exceptions.RequestException as e:
+                logger.warning(
+                    "Failed to fetch statement %s for %s/%s: %s",
+                    num,
+                    proceeding_num,
+                    date,
+                    e,
+                )
+                continue
+            text = _statement_html_to_text(html)
+            if not text:
+                continue
+            if speaker:
+                lines = text.splitlines()
+                if lines:
+                    lines[0] = f"{speaker}: {lines[0]}"
+                text = "\n".join(lines)
+            parts.append(text)
         return "\n\n".join(parts)
 
     def download_video(
@@ -134,9 +200,12 @@ class SejmApiClient:
             logger.warning("No proceeding found for %s via Sejm API", date)
         else:
             proceeding_num = proceeding.get("number")
-            stenogram_html = self.build_stenogram_text(term, proceeding_num, date)
-            stenogram_path = raw_dir / f"{date}_stenogram.html"
-            stenogram_path.write_text(stenogram_html, encoding="utf-8")
+            stenogram_text = self.build_stenogram_text(term, proceeding_num, date)
+            # Saved directly as .txt: the pipeline reads stenogram_path with
+            # a forced ".txt" suffix, and this content is already clean
+            # plain text (not raw HTML) ready for StenogramParserAgent.
+            stenogram_path = raw_dir / f"{date}_stenogram.txt"
+            stenogram_path.write_text(stenogram_text, encoding="utf-8")
             proceedings.stenogram_path = stenogram_path
             logger.info(
                 "Saved stenogram for proceeding %s, date %s", proceeding_num, date

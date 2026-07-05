@@ -13,15 +13,19 @@ logger = logging.getLogger(__name__)
 def _extract_speaker(line: str) -> tuple[Optional[str], str]:
     """Try to extract a speaker name from a line of stenogram text.
 
-    The official stenogram usually marks speakers with patterns like:
-    "Marszałek Sejmu Witold Piotr Sławomir:" or "Poseł Jan Kowalski (KO):".
+    The official stenogram marks speakers with patterns like:
+    "Marszałek Sejmu Witold Piotr Sławomir:", "Poseł Jan Kowalski (KO):",
+    or simply "Marszałek:" when no personal name is attached (common in
+    the official Sejm API data for procedural remarks).
     """
     match = re.match(
-        r"^(Marszałek\s+Sejmu|Marszałek|Poseł|Posłanka|Minister|Premier|Wiceminister|Przewodniczący|Przewodnicząca)\s+(.+?):\s*(.*)$",
+        r"^(Marszałek\s+Sejmu|Marszałek|Wicemarszałek|Poseł|Posłanka|Minister|Premier|Wiceminister|Przewodniczący|Przewodnicząca)(?:\s+(.+?))?:\s*(.*)$",
         line,
     )
     if match:
-        speaker = match.group(2).strip()
+        title = match.group(1).strip()
+        name = match.group(2)
+        speaker = name.strip() if name else title
         text = match.group(3).strip()
         return speaker, text
     return None, line

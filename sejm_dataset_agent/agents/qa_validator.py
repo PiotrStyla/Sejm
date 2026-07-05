@@ -36,7 +36,7 @@ class QAValidatorAgent:
                 reasons.append("gold_text_too_short")
             if self._repetition_ratio(segment.gold_text) > self.max_repetition_ratio:
                 reasons.append("too_repetitive")
-            if re.search(r"\[\w+\]", segment.gold_text):
+            if re.search(r"\[[^\]]+\]", segment.gold_text):
                 reasons.append("contains_event_marker")
             if reasons:
                 segment.valid = False

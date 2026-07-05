@@ -3,9 +3,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from sejm_dataset_agent.agents.stenogram_parser import StenogramParserAgent
+from sejm_dataset_agent.agents.stenogram_parser import StenogramParserAgent, _extract_speaker
 from sejm_dataset_agent.models.schemas import Event, Speech, Segment
-from sejm_dataset_agent.tools.sejm_api import SejmApiClient
+from sejm_dataset_agent.tools.sejm_api import SejmApiClient, _statement_html_to_text
 
 
 def test_speech_dataclass():
@@ -59,6 +59,39 @@ def test_api_client_finds_proceeding_for_date():
 
     assert proceeding is not None
     assert proceeding["number"] == 2
+
+
+def test_extract_speaker_handles_bare_title():
+    """Regression test: 'Marszałek:' with no personal name must still match.
+
+    The official Sejm API frequently returns statements attributed to just
+    the role title (e.g. procedural remarks), without a personal name.
+    """
+    speaker, text = _extract_speaker("Marszałek: Wznawiam posiedzenie.")
+    assert speaker == "Marszałek"
+    assert text == "Wznawiam posiedzenie."
+
+
+def test_extract_speaker_handles_title_with_name():
+    speaker, text = _extract_speaker(
+        "Marszałek Sejmu Witold Piotr Sławomir: Dziękuję."
+    )
+    assert speaker == "Witold Piotr Sławomir"
+    assert text == "Dziękuję."
+
+
+def test_statement_html_to_text_converts_known_events():
+    """Regression test: standalone parenthetical events become bracket markers."""
+    html = (
+        "<p>Wznawiam posiedzenie.</p>"
+        "<p>(Oklaski)</p>"
+        "<p>(To nie jest znane zdarzenie)</p>"
+    )
+    text = _statement_html_to_text(html)
+    lines = text.splitlines()
+    assert "Wznawiam posiedzenie." in lines
+    assert "[Oklaski]" in lines
+    assert "(To nie jest znane zdarzenie)" in lines
 
 
 def test_api_client_finds_plenary_video():
