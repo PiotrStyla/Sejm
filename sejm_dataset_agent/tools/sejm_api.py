@@ -159,25 +159,46 @@ class SejmApiClient:
         return "\n\n".join(parts)
 
     def download_video(
-        self, video_url: str, destination: Path, timeout: int = 300
+        self,
+        video_url: str,
+        destination: Path,
+        timeout: int = 7200,
+        max_duration: float | None = None,
     ) -> Path:
-        """Download an HLS video stream using ffmpeg."""
+        """Download an HLS video stream using ffmpeg into a single .mp4 file.
+
+        HLS (.m3u8) streams must be muxed into a container like .mp4 or .ts;
+        if the output path keeps the .m3u8 extension ffmpeg will produce
+        hundreds of individual segment files instead of one file.
+
+        If *max_duration* is given (in seconds), only that many seconds are
+        downloaded — useful for testing or when disk space is limited.
+        """
+        # Force .mp4 extension so ffmpeg writes a single file, not HLS segments.
+        if destination.suffix in (".m3u8", ".m3u"):
+            destination = destination.with_suffix(".mp4")
         destination.parent.mkdir(parents=True, exist_ok=True)
         command = [
             "ffmpeg",
             "-y",
             "-i",
             video_url,
+        ]
+        if max_duration is not None:
+            command.extend(["-t", str(int(max_duration))])
+        command.extend([
             "-c",
             "copy",
+            "-bsf:a",
+            "aac_adtstoasc",
             str(destination),
-        ]
+        ])
         logger.info("Downloading HLS video to %s", destination)
         subprocess.run(command, check=True, capture_output=True, text=True, timeout=timeout)
         return destination
 
     def fetch_proceedings(
-        self, date: str, term: str, raw_dir: Path
+        self, date: str, term: str, raw_dir: Path, max_duration: float | None = None
     ) -> RawProceedings:
         """Fetch video and stenogram for a given day via the official Sejm API."""
         proceedings = RawProceedings(date=date)
@@ -190,9 +211,8 @@ class SejmApiClient:
             if not video_url:
                 logger.warning("Video entry for %s has no videoLink", date)
             else:
-                ext = Path(video_url.split("?")[0]).suffix or ".mp4"
                 proceedings.video_path = self.download_video(
-                    video_url, raw_dir / f"{date}_video{ext}"
+                    video_url, raw_dir / f"{date}_video.mp4", max_duration=max_duration
                 )
 
         proceeding = self.find_proceeding_for_date(term, date)

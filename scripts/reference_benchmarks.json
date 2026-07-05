@@ -1,0 +1,23 @@
+[
+  {
+    "dataset": "amu-cai/llmzszl-dataset",
+    "config": "default",
+    "split": "test",
+    "fields": ["question"],
+    "rows": 500
+  },
+  {
+    "dataset": "clarin-pl/poquad",
+    "config": "poquad",
+    "split": "validation",
+    "fields": ["question", "context"],
+    "rows": 500
+  },
+  {
+    "dataset": "speakleash/PES-2018-2022",
+    "config": "alergologia",
+    "split": "test",
+    "fields": ["question"],
+    "rows": 200
+  }
+]

@@ -25,7 +25,8 @@ class SejmScraperAgent:
         if self.settings.data_source == "api":
             try:
                 proceedings = self.api_client.fetch_proceedings(
-                    date=date, term=term, raw_dir=raw_dir
+                    date=date, term=term, raw_dir=raw_dir,
+                    max_duration=self.settings.video_max_duration,
                 )
                 if proceedings.video_path and proceedings.stenogram_path:
                     logger.info("[ScraperAgent] Fetched materials via Sejm API")
