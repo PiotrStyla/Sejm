@@ -21,7 +21,14 @@ class AudioProcessorAgent:
         self.min_segment_seconds = min_segment_seconds
         self.max_segment_seconds = max_segment_seconds
 
-    def run(self, video_path: Path, work_dir: Path) -> Path:
+    def run(self, video_path: Path, work_dir: Path, segments_dir: Path) -> Path:
+        """Extract audio and segment it.
+
+        `work_dir` holds the transient full-length audio file, which is
+        safe to delete once processing is done. `segments_dir` should live
+        under the persistent output directory, since the ASR/speaker
+        datasets reference these segment file paths directly.
+        """
         logger.info("[AudioProcessorAgent] Extracting audio from %s", video_path)
         audio_path = work_dir / f"{video_path.stem}.wav"
         extract_audio(
@@ -30,7 +37,6 @@ class AudioProcessorAgent:
             sample_rate=self.sample_rate,
         )
 
-        segments_dir = work_dir / "segments"
         segment_audio(
             audio_path=audio_path,
             output_dir=segments_dir,

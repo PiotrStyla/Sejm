@@ -2,6 +2,7 @@
 
 import json
 import logging
+import shutil
 from pathlib import Path
 
 from config.settings import Settings
@@ -47,19 +48,24 @@ def run_pipeline(
         )
         return
 
+    # Segments are written directly under output_dir (not work_dir) because
+    # the ASR/speaker datasets below reference these file paths, and
+    # work_dir is deleted at the end of the pipeline to save disk space.
+    segments_dir = output_dir / "audio_segments"
+
     audio_processor = AudioProcessorAgent(
         sample_rate=settings.audio_sample_rate,
         min_segment_seconds=settings.min_segment_seconds,
         max_segment_seconds=settings.max_segment_seconds,
     )
-    audio_path = audio_processor.run(proceedings.video_path, work_dir)
+    audio_path = audio_processor.run(proceedings.video_path, work_dir, segments_dir)
 
     transcriber = TranscriberAgent(
         model_size=settings.whisper_model_size,
         device=settings.whisper_device,
         compute_type=settings.whisper_compute_type,
     )
-    transcriptions = transcriber.run(work_dir / "segments")
+    transcriptions = transcriber.run(segments_dir)
 
     stenogram_parser = StenogramParserAgent()
     speeches = stenogram_parser.run(
@@ -136,5 +142,16 @@ def run_pipeline(
             events=all_events,
             output_dir=output_dir / "events",
         )
+
+    if settings.cleanup_raw_files:
+        # Raw video and the full-length extracted audio are the largest
+        # disk consumers (several GB per day) and are no longer needed
+        # once segmentation and dataset building above are done. Segment
+        # WAV files under output_dir/audio_segments are kept, since the
+        # ASR/speaker datasets reference them.
+        for path in (raw_dir, work_dir):
+            if path.exists():
+                shutil.rmtree(path, ignore_errors=True)
+        logger.info("Cleaned up raw/work directories for %s to save disk space", date)
 
     logger.info("Pipeline completed for %s. Output: %s", date, output_dir)

@@ -19,6 +19,24 @@ Agent składa się z kilku wyspecjalizowanych agentów, które współpracują w
 - ffmpeg (w PATH)
 - GPU opcjonalnie (transkrypcja działa też na CPU, ale wolniej)
 
+## Wymagania dyskowe i sprzętowe
+
+Rozmiar danych dla **jednego dnia obrad** (~8-10h):
+
+| Komponent | Rozmiar | Trwały? |
+|---|---|---|
+| Wideo (HLS→mp4) | 2–8 GB | Nie — usuwane po przetworzeniu |
+| Pełne audio WAV (16kHz mono) | ~0.9–1.1 GB | Nie — usuwane po segmentacji |
+| Segmenty audio (`audio_segments/`) | ~0.9–1.1 GB | **Tak** — referencje w `asr_dataset.csv` |
+| Model Whisper `large-v3` (cache, jednorazowo) | ~1.5 GB | Tak, współdzielony między dniami |
+| Finalne datasety tekstowe (csv/jsonl/md) | < 20 MB | Tak |
+
+Domyślnie (`CLEANUP_RAW_FILES=true`) agent usuwa surowe wideo i pełne audio zaraz po zbudowaniu datasetów, zostawiając ~1 GB/dzień (segmenty + tekst) zamiast ~5–11 GB/dzień. Przy 70 GB wolnego miejsca pozwala to przetworzyć **kilkadziesiąt dni** obrad zamiast 6-13.
+
+Jeśli nie potrzebujesz datasetu ASR (segmenty audio), możesz ręcznie usunąć `audio_segments/` po uruchomieniu — zostanie tylko tekst (`speeches_corpus.jsonl` i pozostałe pliki), rzędu kilkunastu MB na dzień.
+
+**CPU vs GPU**: domyślne ustawienia (`WHISPER_DEVICE=cpu`, `WHISPER_COMPUTE_TYPE=int8`) działają bez GPU, ale transkrypcja 8h audio na CPU może potrwać znacznie dłużej niż w czasie rzeczywistym (zależnie od CPU — zwykle kilka godzin). Z GPU (CUDA) transkrypcja jest rzędu kilkunastu minut na dzień obrad.
+
 ## Instalacja
 
 ```bash

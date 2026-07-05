@@ -26,6 +26,7 @@ class Settings:
     output_dir: Path = Path("./datasets")
     min_word_threshold: int = 50
     reference_corpus_dir: Optional[Path] = None
+    cleanup_raw_files: bool = True
 
 
 def load_settings() -> Settings:
@@ -44,4 +45,5 @@ def load_settings() -> Settings:
         output_dir=Path(os.getenv("OUTPUT_DIR", "./datasets")),
         min_word_threshold=int(os.getenv("MIN_WORD_THRESHOLD", "50")),
         reference_corpus_dir=Path(reference_dir) if reference_dir else None,
+        cleanup_raw_files=os.getenv("CLEANUP_RAW_FILES", "true").lower() == "true",
     )
