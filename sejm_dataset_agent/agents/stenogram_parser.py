@@ -31,6 +31,30 @@ def _extract_speaker(line: str) -> tuple[Optional[str], str]:
     return None, line
 
 
+def _merge_consecutive_same_speaker(speeches: list[Speech]) -> list[Speech]:
+    """Merge consecutive Speech entries from the same speaker into one.
+
+    The official API splits a single speaking turn across multiple
+    "statements" (e.g. interrupted by a vote tally or a formatting
+    boundary), which otherwise produces many artificially short Speech
+    fragments attributed to the same person back-to-back. Merging only
+    ever combines *immediately adjacent* entries with an identical
+    speaker, so distinct people's turns are never conflated.
+    """
+    if not speeches:
+        return speeches
+
+    merged: list[Speech] = [speeches[0]]
+    for speech in speeches[1:]:
+        last = merged[-1]
+        if speech.speaker == last.speaker:
+            last.text = f"{last.text} {speech.text}".strip()
+            last.events.extend(speech.events)
+        else:
+            merged.append(speech)
+    return merged
+
+
 class StenogramParserAgent:
     """Parses the official stenogram into structured speeches and events."""
 
@@ -87,5 +111,11 @@ class StenogramParserAgent:
                 )
             )
 
-        logger.info("[StenogramParserAgent] Extracted %d speeches", len(speeches))
-        return speeches
+        logger.info("[StenogramParserAgent] Extracted %d raw speeches", len(speeches))
+        merged = _merge_consecutive_same_speaker(speeches)
+        logger.info(
+            "[StenogramParserAgent] Merged consecutive same-speaker speeches: %d -> %d",
+            len(speeches),
+            len(merged),
+        )
+        return merged

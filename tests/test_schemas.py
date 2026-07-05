@@ -3,7 +3,11 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from sejm_dataset_agent.agents.stenogram_parser import StenogramParserAgent, _extract_speaker
+from sejm_dataset_agent.agents.stenogram_parser import (
+    StenogramParserAgent,
+    _extract_speaker,
+    _merge_consecutive_same_speaker,
+)
 from sejm_dataset_agent.models.schemas import Event, Speech, Segment
 from sejm_dataset_agent.tools.sejm_api import SejmApiClient, _statement_html_to_text
 
@@ -92,6 +96,35 @@ def test_statement_html_to_text_converts_known_events():
     assert "Wznawiam posiedzenie." in lines
     assert "[Oklaski]" in lines
     assert "(To nie jest znane zdarzenie)" in lines
+
+
+def test_merge_consecutive_same_speaker_combines_text():
+    speeches = [
+        Speech(speaker="Marszałek", text="Kto jest za?"),
+        Speech(speaker="Marszałek", text="Kto jest przeciw?"),
+        Speech(speaker="Poseł Jan Kowalski", text="Dziękuję."),
+        Speech(speaker="Marszałek", text="Kto się wstrzymał?"),
+    ]
+    merged = _merge_consecutive_same_speaker(speeches)
+    assert len(merged) == 3
+    assert merged[0].speaker == "Marszałek"
+    assert merged[0].text == "Kto jest za? Kto jest przeciw?"
+    assert merged[1].speaker == "Poseł Jan Kowalski"
+    assert merged[2].text == "Kto się wstrzymał?"
+
+
+def test_merge_consecutive_same_speaker_merges_events():
+    speeches = [
+        Speech(speaker="Marszałek", text="A", events=[Event("Oklaski", 0, 1)]),
+        Speech(speaker="Marszałek", text="B", events=[Event("Dzwonek", 0, 1)]),
+    ]
+    merged = _merge_consecutive_same_speaker(speeches)
+    assert len(merged) == 1
+    assert [e.label for e in merged[0].events] == ["Oklaski", "Dzwonek"]
+
+
+def test_merge_consecutive_same_speaker_empty_list():
+    assert _merge_consecutive_same_speaker([]) == []
 
 
 def test_api_client_finds_plenary_video():
