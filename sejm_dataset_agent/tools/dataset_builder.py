@@ -78,17 +78,26 @@ def build_speeches_corpus_dataset(
     date: str,
     term: str,
     source_url: str,
+    min_word_count: int = 0,
 ) -> Path:
     """Write the raw stenogram speeches as a general-purpose text corpus.
 
     This is the primary CPT/SFT-shaped asset: one JSONL record per speech,
     with metadata for provenance and downstream quality auditing.
+
+    If *min_word_count* > 0, speeches with fewer words are skipped entirely
+    (they are typically procedural interjections with no training value).
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
+    skipped = 0
     with open(output_path, "w", encoding="utf-8") as f:
         for speech in speeches:
             if not speech.text.strip():
+                continue
+            word_count = len(speech.text.split())
+            if min_word_count > 0 and word_count < min_word_count:
+                skipped += 1
                 continue
             json.dump(
                 {
@@ -98,7 +107,7 @@ def build_speeches_corpus_dataset(
                     "term": term,
                     "source_url": source_url,
                     "char_count": len(speech.text),
-                    "word_count": len(speech.text.split()),
+                    "word_count": word_count,
                     "has_events": bool(speech.events),
                 },
                 f,
@@ -106,6 +115,11 @@ def build_speeches_corpus_dataset(
             )
             f.write("\n")
             count += 1
+    if skipped:
+        logger.info(
+            "Speeches corpus: skipped %d short speeches (<%d words), wrote %d records",
+            skipped, min_word_count, count,
+        )
     logger.info("Speeches corpus dataset written to %s (%d records)", output_path, count)
     return output_path
 

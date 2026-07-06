@@ -52,6 +52,7 @@ def run_pipeline(
         date=date,
         term=term,
         source_url=source_url,
+        min_word_count=settings.min_word_threshold,
     )
     speeches_records = [
         json.loads(line)
