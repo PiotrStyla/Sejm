@@ -9,14 +9,24 @@ removal, and should be reviewed manually for sensitive corpora.
 import re
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
-_PHONE_RE = re.compile(r"(?:\+48[\s-]?)?(?:\d{3}[\s-]?){3}")
+# Phone: require +48 prefix or (XX) XXX-XX-XX format to avoid matching
+# budget figures like "192 513 271 zł" which are 9-digit monetary amounts.
+_PHONE_RE = re.compile(
+    r"(?:\+48[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3})"
+    r"|(?:\(\d{2}\)\s?\d{3}[\s-]?\d{2}[\s-]?\d{2})"
+)
 _PESEL_RE = re.compile(r"(?<!\d)\d{11}(?!\d)")
+
+
+def redact_text(text: str) -> str:
+    """Replace emails with [EMAIL] placeholder."""
+    return _EMAIL_RE.sub("[EMAIL]", text)
 
 
 def scan_text(text: str) -> dict:
     """Scan a single text for emails, phone-like numbers, and PESEL-like numbers."""
     emails = _EMAIL_RE.findall(text)
-    phones = [m for m in _PHONE_RE.findall(text) if len(re.sub(r"\D", "", m)) >= 9]
+    phones = _PHONE_RE.findall(text)
     pesel = _PESEL_RE.findall(text)
     return {"emails": emails, "phones": phones, "pesel": pesel}
 

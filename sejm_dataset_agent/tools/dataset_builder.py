@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 from ..models.schemas import Segment, Speech
+from ..tools.pii_scanner import redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -99,15 +100,16 @@ def build_speeches_corpus_dataset(
             if min_word_count > 0 and word_count < min_word_count:
                 skipped += 1
                 continue
+            clean_text = redact_text(speech.text)
             json.dump(
                 {
-                    "text": speech.text,
+                    "text": clean_text,
                     "speaker": speech.speaker,
                     "date": date,
                     "term": term,
                     "source_url": source_url,
-                    "char_count": len(speech.text),
-                    "word_count": word_count,
+                    "char_count": len(clean_text),
+                    "word_count": len(clean_text.split()),
                     "has_events": bool(speech.events),
                 },
                 f,
