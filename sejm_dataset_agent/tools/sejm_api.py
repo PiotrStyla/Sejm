@@ -117,6 +117,7 @@ class SejmApiClient:
             headers={"Accept": "text/html"},
         )
         response.raise_for_status()
+        response.encoding = "utf-8"
         return response.text
 
     def build_stenogram_text(
