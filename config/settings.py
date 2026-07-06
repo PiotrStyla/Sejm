@@ -28,6 +28,7 @@ class Settings:
     reference_corpus_dir: Optional[Path] = None
     cleanup_raw_files: bool = True
     video_max_duration: Optional[float] = None  # seconds; None = full video
+    enable_audio_pipeline: bool = False  # text-only by default; set True for ASR/audio datasets
 
 
 def load_settings() -> Settings:
@@ -48,4 +49,5 @@ def load_settings() -> Settings:
         reference_corpus_dir=Path(reference_dir) if reference_dir else None,
         cleanup_raw_files=os.getenv("CLEANUP_RAW_FILES", "true").lower() == "true",
         video_max_duration=float(os.getenv("VIDEO_MAX_DURATION")) if os.getenv("VIDEO_MAX_DURATION") else None,
+        enable_audio_pipeline=os.getenv("ENABLE_AUDIO_PIPELINE", "false").lower() == "true",
     )

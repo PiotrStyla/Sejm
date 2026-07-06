@@ -22,14 +22,19 @@ class SejmScraperAgent:
     def run(self, date: str, term: str, raw_dir: Path) -> RawProceedings:
         logger.info("[ScraperAgent] Fetching proceedings for %s", date)
 
+        skip_video = not self.settings.enable_audio_pipeline
         if self.settings.data_source == "api":
             try:
                 proceedings = self.api_client.fetch_proceedings(
                     date=date, term=term, raw_dir=raw_dir,
                     max_duration=self.settings.video_max_duration,
+                    skip_video=skip_video,
                 )
-                if proceedings.video_path and proceedings.stenogram_path:
-                    logger.info("[ScraperAgent] Fetched materials via Sejm API")
+                if proceedings.stenogram_path:
+                    if skip_video:
+                        logger.info("[ScraperAgent] Fetched stenogram via Sejm API (video skipped)")
+                    else:
+                        logger.info("[ScraperAgent] Fetched materials via Sejm API")
                     return proceedings
                 logger.warning(
                     "[ScraperAgent] API returned incomplete data, falling back to scraping"

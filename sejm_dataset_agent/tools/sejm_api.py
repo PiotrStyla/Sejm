@@ -198,27 +198,33 @@ class SejmApiClient:
         return destination
 
     def fetch_proceedings(
-        self, date: str, term: str, raw_dir: Path, max_duration: float | None = None
+        self, date: str, term: str, raw_dir: Path,
+        max_duration: float | None = None, skip_video: bool = False,
     ) -> RawProceedings:
-        """Fetch video and stenogram for a given day via the official Sejm API."""
+        """Fetch video and stenogram for a given day via the official Sejm API.
+
+        If *skip_video* is True, only the stenogram is fetched (text-only mode).
+        """
         proceedings = RawProceedings(date=date)
 
-        video = self.find_plenary_video(term, date)
-        if video is None:
-            logger.warning("No video found for %s via Sejm API", date)
-        else:
-            video_url = video.get("videoLink")
-            if not video_url:
-                logger.warning("Video entry for %s has no videoLink", date)
+        if not skip_video:
+            video = self.find_plenary_video(term, date)
+            if video is None:
+                logger.warning("No video found for %s via Sejm API", date)
             else:
-                proceedings.video_path = self.download_video(
-                    video_url, raw_dir / f"{date}_video.mp4", max_duration=max_duration
-                )
+                video_url = video.get("videoLink")
+                if not video_url:
+                    logger.warning("Video entry for %s has no videoLink", date)
+                else:
+                    proceedings.video_path = self.download_video(
+                        video_url, raw_dir / f"{date}_video.mp4", max_duration=max_duration
+                    )
 
         proceeding = self.find_proceeding_for_date(term, date)
         if proceeding is None:
             logger.warning("No proceeding found for %s via Sejm API", date)
         else:
+            raw_dir.mkdir(parents=True, exist_ok=True)
             proceeding_num = proceeding.get("number")
             stenogram_text = self.build_stenogram_text(term, proceeding_num, date)
             # Saved directly as .txt: the pipeline reads stenogram_path with
