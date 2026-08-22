@@ -1,0 +1,14 @@
+{
+  "schema_version": "slayer.ai/failure/v1",
+  "id": "slayer://failure/hugging-face-write-token-403",
+  "kind": "failure",
+  "status": "resolved",
+  "symptom": "Hugging Face rejected the Xet upload token request with HTTP 403.",
+  "root_cause": "The first HF_TOKEN lacked write permission for PiotrSty/sejm-speeches-corpus.",
+  "resolution": "Replace the GitHub Actions secret with a scoped token granting write access to the target dataset.",
+  "regression_guard": "Publication workflow fails closed when upload authorization is absent and exposes HF_TOKEN only to upload, verification metadata upload, and release tagging steps.",
+  "evidence": {
+    "failed_github_run": "32579221466 attempt 1",
+    "successful_github_run": "32579221466 attempt 2"
+  }
+}
