@@ -49,24 +49,27 @@ jobs:
           tests.test_sejm_release_v2
           tests.test_repair_committee_transcripts
 
-      - name: Pin the current dataset revision and its unique Parquet file
+      - name: Pin the source dataset and Dataset Viewer Parquet revisions
         id: source
         run: >-
           python -c "import os,re;from huggingface_hub import HfApi;
-          info=HfApi().dataset_info(os.environ['DATASET_REPOSITORY'],files_metadata=True);
-          paths=[x.rfilename for x in info.siblings if x.rfilename.endswith('.parquet')];
-          assert re.fullmatch('[0-9a-f]{40}',info.sha),info.sha;
-          assert len(paths)==1, 'expected exactly one source Parquet file: '+repr(paths);
+          api=HfApi();repo=os.environ['DATASET_REPOSITORY'];
+          source=api.dataset_info(repo,files_metadata=True);
+          converted=api.dataset_info(repo,revision='refs/convert/parquet',files_metadata=True);
+          paths=[x.rfilename for x in converted.siblings if x.rfilename.endswith('.parquet')];
+          assert re.fullmatch('[0-9a-f]{40}',source.sha),source.sha;
+          assert re.fullmatch('[0-9a-f]{40}',converted.sha),converted.sha;
+          assert len(paths)==1, 'expected exactly one converted Parquet file: '+repr(paths);
           f=open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8');
-          f.write('revision='+info.sha+'\\n'+'parquet_path='+paths[0]+'\\n');f.close();
-          print('Pinned source:',info.sha,'Parquet:',paths[0])"
+          f.write('revision='+source.sha+'\\n'+'converted_revision='+converted.sha+'\\n'+'parquet_path='+paths[0]+'\\n');f.close();
+          print('Pinned source:',source.sha,'Converted revision:',converted.sha,'Parquet:',paths[0])"
 
-      - name: Download the immutable damaged source dataset
+      - name: Download the immutable Dataset Viewer Parquet shard
         run: >-
           hf download "$DATASET_REPOSITORY"
           "${{ steps.source.outputs.parquet_path }}"
           --repo-type dataset
-          --revision "${{ steps.source.outputs.revision }}"
+          --revision "${{ steps.source.outputs.converted_revision }}"
           --local-dir "$RUNNER_TEMP/committee-source"
 
       - name: Reconstruct attributed committee speaker turns
@@ -74,7 +77,7 @@ jobs:
           python scripts/repair_committee_transcripts.py
           --input "$RUNNER_TEMP/committee-source/${{ steps.source.outputs.parquet_path }}"
           --output "$RUNNER_TEMP/committee-repaired"
-          --relative-parquet-path "${{ steps.source.outputs.parquet_path }}"
+          --relative-parquet-path data/train.parquet
           --source-revision "${{ steps.source.outputs.revision }}"
           --actor "$REPAIR_ACTOR"
           --run-id "$REPAIR_RUN_ID"
