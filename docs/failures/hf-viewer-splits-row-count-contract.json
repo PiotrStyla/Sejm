@@ -1,0 +1,18 @@
+{
+  "schema_version": "slayer.ai/failure/v1",
+  "id": "slayer://failure/hf-viewer-splits-row-count-contract",
+  "kind": "failure",
+  "status": "resolved",
+  "observed_at": "2026-08-22",
+  "symptom": "The release verifier kept retrying although Hugging Face Dataset Viewer exposed both healthy splits.",
+  "root_cause": "The verifier expected a num_examples field from the official /splits endpoint. That endpoint lists dataset, config, and split identifiers only; row counts belong to the /size endpoint as num_rows.",
+  "resolution": "Validate availability with /splits, obtain non-zero per-split row counts from /size, and validate the canonical schema with /first-rows.",
+  "regression_tests": [
+    "test_dataset_viewer_payload_validation"
+  ],
+  "evidence": {
+    "canceled_github_run": "https://github.com/PiotrStyla/Sejm/actions/runs/32581429573",
+    "fix_pull_request": "https://github.com/PiotrStyla/Sejm/pull/3",
+    "api_contract": "https://huggingface.co/docs/dataset-viewer/quick_start"
+  }
+}

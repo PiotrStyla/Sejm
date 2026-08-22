@@ -119,6 +119,12 @@ class OntologyReleaseTests(unittest.TestCase):
             self.assertEqual(manifest["run"]["actor_id"], "github:test-actor")
             self.assertEqual(manifest["actors"][0]["identity"], "github:test-actor")
             self.assertEqual(manifest["source"]["revision"], "a" * 40)
+            self.assertTrue(
+                any(
+                    ref.endswith("/docs/failures/hf-viewer-splits-row-count-contract.json")
+                    for ref in manifest["failure_objects"]
+                )
+            )
 
     def test_evidence_is_versioned_and_zero_counts_are_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
