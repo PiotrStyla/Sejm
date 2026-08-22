@@ -18,7 +18,7 @@ from prepare_sejm_release_v2 import (
     prepare_release,
     record_identity,
 )
-from verify_hf_release import validate_rows, validate_splits
+from verify_hf_release import validate_rows, validate_size, validate_splits
 
 
 def sample_record(index: int, *, plural_term: bool = False) -> dict[str, object]:
@@ -164,12 +164,22 @@ class ViewerAttestationTests(unittest.TestCase):
     def test_dataset_viewer_payload_validation(self) -> None:
         splits = {
             "splits": [
-                {"config": "default", "split": "train", "num_examples": 154599},
-                {"config": "default", "split": "validation", "num_examples": 3115},
+                {"config": "default", "split": "train"},
+                {"config": "default", "split": "validation"},
             ]
         }
         self.assertEqual(
             validate_splits(splits, "default", {"train", "validation"}),
+            ["train", "validation"],
+        )
+        size = {
+            "size": {"splits": [
+                {"config": "default", "split": "train", "num_rows": 154599},
+                {"config": "default", "split": "validation", "num_rows": 3115},
+            ]}
+        }
+        self.assertEqual(
+            validate_size(size, "default", {"train", "validation"}),
             {"train": 154599, "validation": 3115},
         )
         fields = set(SCHEMA_FIELDS)
