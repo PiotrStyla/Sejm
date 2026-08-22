@@ -1,0 +1,90 @@
+name: Repair Sejm committee transcript dataset
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/repair-sejm-committee-dataset.yml
+      - scripts/repair_committee_transcripts.py
+      - tests/test_repair_committee_transcripts.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repair-sejm-committee-dataset
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DATASET_REPOSITORY: PiotrSty/sejm-committee-transcripts
+      REPAIR_ACTOR: github:${{ github.actor }}
+      REPAIR_RUN_ID: github-actions:${{ github.run_id }}:attempt:${{ github.run_attempt }}
+
+    steps:
+      - name: Check out reviewed repair implementation
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11.16"
+
+      - name: Install pinned dataset repair dependencies
+        run: >-
+          python -m pip install
+          'huggingface_hub[cli]==0.34.4'
+          'pyarrow==19.0.1'
+
+      - name: Run committee transcript regression and ontology tests
+        run: >-
+          python -m unittest -v
+          tests.test_sejm_release_v2
+          tests.test_repair_committee_transcripts
+
+      - name: Pin the current dataset revision and its unique Parquet file
+        id: source
+        run: >-
+          python -c "import os,re;from huggingface_hub import HfApi;
+          info=HfApi().dataset_info(os.environ['DATASET_REPOSITORY'],files_metadata=True);
+          paths=[x.rfilename for x in info.siblings if x.rfilename.endswith('.parquet')];
+          assert re.fullmatch('[0-9a-f]{40}',info.sha),info.sha;
+          assert len(paths)==1, 'expected exactly one source Parquet file: '+repr(paths);
+          f=open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8');
+          f.write('revision='+info.sha+'\\n'+'parquet_path='+paths[0]+'\\n');f.close();
+          print('Pinned source:',info.sha,'Parquet:',paths[0])"
+
+      - name: Download the immutable damaged source dataset
+        run: >-
+          hf download "$DATASET_REPOSITORY"
+          "${{ steps.source.outputs.parquet_path }}"
+          --repo-type dataset
+          --revision "${{ steps.source.outputs.revision }}"
+          --local-dir "$RUNNER_TEMP/committee-source"
+
+      - name: Reconstruct attributed committee speaker turns
+        run: >-
+          python scripts/repair_committee_transcripts.py
+          --input "$RUNNER_TEMP/committee-source/${{ steps.source.outputs.parquet_path }}"
+          --output "$RUNNER_TEMP/committee-repaired"
+          --relative-parquet-path "${{ steps.source.outputs.parquet_path }}"
+          --source-revision "${{ steps.source.outputs.revision }}"
+          --actor "$REPAIR_ACTOR"
+          --run-id "$REPAIR_RUN_ID"
+          --git-commit "$GITHUB_SHA"
+
+      - name: Publish corrected dataset and auditable provenance
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          hf upload "$DATASET_REPOSITORY" "$RUNNER_TEMP/committee-repaired" .
+          --repo-type dataset
+          --commit-message "Repair committee speaker turns, remove transcript suffix overlap and document statutory license"
+          --commit-description "Reconstructs individual Sejm committee speeches from the pinned damaged revision, preserves original speaker attribution and official URLs, removes exact extraction duplicates, documents statutory reuse and publishes falsifiable Slayer ontology evidence."
