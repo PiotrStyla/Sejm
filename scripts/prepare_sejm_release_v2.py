@@ -437,6 +437,7 @@ def prepare_release(
         "failure_objects": [
             f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/sejm-dataset-viewer-cast-error.json",
             f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/hugging-face-write-token-403.json",
+            f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/hf-viewer-splits-row-count-contract.json",
         ],
     }
     manifest_path = metadata_dir / "release-manifest.json"
