@@ -20,13 +20,23 @@ def fetch_json(url: str) -> dict[str, Any]:
         return json.load(response)
 
 
-def validate_splits(payload: dict[str, Any], config: str, expected: set[str]) -> dict[str, int]:
-    found: dict[str, int] = {}
+def validate_splits(payload: dict[str, Any], config: str, expected: set[str]) -> list[str]:
+    found: set[str] = set()
     for item in payload.get("splits", []):
         if item.get("config") == config and item.get("split") in expected:
-            found[item["split"]] = int(item.get("num_examples") or 0)
+            found.add(item["split"])
+    if found != expected:
+        raise ValueError(f"expected indexed splits {sorted(expected)}, found {sorted(found)}")
+    return sorted(found)
+
+
+def validate_size(payload: dict[str, Any], config: str, expected: set[str]) -> dict[str, int]:
+    found: dict[str, int] = {}
+    for item in payload.get("size", {}).get("splits", []):
+        if item.get("config") == config and item.get("split") in expected:
+            found[item["split"]] = int(item.get("num_rows") or 0)
     if set(found) != expected or any(value <= 0 for value in found.values()):
-        raise ValueError(f"expected indexed splits {sorted(expected)}, found {found}")
+        raise ValueError(f"expected non-empty sized splits {sorted(expected)}, found {found}")
     return found
 
 
@@ -59,7 +69,11 @@ def verify(repo_id: str, config: str, splits: list[str], timeout: int) -> dict[s
             split_payload = fetch_json(
                 f"https://datasets-server.huggingface.co/splits?dataset={dataset}"
             )
-            counts = validate_splits(split_payload, config, set(splits))
+            available_splits = validate_splits(split_payload, config, set(splits))
+            size_payload = fetch_json(
+                f"https://datasets-server.huggingface.co/size?dataset={dataset}"
+            )
+            counts = validate_size(size_payload, config, set(splits))
             schemas: dict[str, list[str]] = {}
             for split in splits:
                 query = urllib.parse.urlencode(
@@ -69,7 +83,11 @@ def verify(repo_id: str, config: str, splits: list[str], timeout: int) -> dict[s
                     f"https://datasets-server.huggingface.co/first-rows?{query}"
                 )
                 schemas[split] = validate_rows(payload, expected_fields)
-            return {"record_counts": counts, "schemas": schemas}
+            return {
+                "available_splits": available_splits,
+                "record_counts": counts,
+                "schemas": schemas,
+            }
         except Exception as exc:  # transient indexing and HTTP failures are retried
             last_error = exc
             time.sleep(10)
