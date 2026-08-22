@@ -1,0 +1,69 @@
+name: Publish Sejm dataset to Hugging Face
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publish:
+        description: Type PUBLISH to authorize updating the Hugging Face dataset
+        required: true
+        default: "NO"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-sejm-huggingface-dataset
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ inputs.confirm_publish == 'PUBLISH' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_DATASET_REPO: PiotrSty/sejm-speeches-corpus
+
+    steps:
+      - name: Check out the reviewed repository revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned release dependencies
+        run: python -m pip install 'huggingface_hub[cli]==0.34.4' 'pyarrow==19.0.1'
+
+      - name: Run release regression tests
+        run: python -m unittest -v tests.test_sejm_release
+
+      - name: Download the existing public source archive
+        run: >-
+          hf download "$HF_DATASET_REPO" speeches_corpus_all.zip
+          --repo-type dataset
+          --local-dir "$RUNNER_TEMP/sejm-source"
+
+      - name: Prepare canonical Parquet splits and provenance evidence
+        run: >-
+          python scripts/prepare_sejm_release.py
+          "$RUNNER_TEMP/sejm-source/speeches_corpus_all.zip"
+          --output "$RUNNER_TEMP/sejm-release"
+          --min-words 50
+
+      - name: Include the reviewed Hugging Face dataset card
+        run: >-
+          install -m 0644 docs/huggingface_dataset_card.md
+          "$RUNNER_TEMP/sejm-release/README.md"
+
+      - name: Publish the explicitly confirmed release
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          hf upload "$HF_DATASET_REPO" "$RUNNER_TEMP/sejm-release" .
+          --repo-type dataset
+          --include 'README.md' 'data/*.parquet' 'metadata/release-manifest.json'
+          --commit-message 'Release Sejm Corpus 1.0.0-rc1 with canonical Parquet splits'
