@@ -21,6 +21,38 @@ from typing import Any, Iterable, Iterator, TextIO
 SCHEMA_VERSION = "slayer.ai/dataset-release/v1"
 OBJECT_ID = "slayer://object/dataset/piotrsty-sejm-speeches-corpus"
 OBJECT_NAME = "PiotrSty/sejm-speeches-corpus"
+OPEN_REUSE_LICENSE_ID = "other"
+OPEN_REUSE_LICENSE_NAME = "polish-public-sector-open-statutory-reuse"
+SEJM_API_DOCS_URL = "https://api.sejm.gov.pl/sejm.html"
+OPEN_DATA_ACT_URL = "https://eli.gov.pl/api/acts/DU/2023/1524/text.html"
+COPYRIGHT_ACT_URL = "https://eli.gov.pl/api/acts/DU/2025/24/text/O/D20250024.pdf"
+LEGAL_BASIS = (
+    {
+        "source": "official_sejm_api",
+        "url": SEJM_API_DOCS_URL,
+        "scope": "published parliamentary transcripts and speeches",
+    },
+    {
+        "source": "polish_copyright_act",
+        "url": COPYRIGHT_ACT_URL,
+        "articles": ["4(2)"],
+        "finding": "official documents and materials are excluded from copyright",
+    },
+    {
+        "source": "polish_open_data_act",
+        "url": OPEN_DATA_ACT_URL,
+        "articles": ["2(12)", "5", "6", "14(1)", "15", "17"],
+        "finding": (
+            "public-sector information is reusable for any purpose, subject to "
+            "statutory exceptions and published conditions"
+        ),
+    },
+)
+REUSE_LIMITATIONS = (
+    "statutory privacy and personal-data exceptions",
+    "third-party rights and provider-specific reuse conditions",
+    "no upstream Creative Commons grant is asserted",
+)
 DEFAULT_MAX_YEAR = 2027
 SCHEMA_FIELDS = (
     "text", "speaker", "date", "term", "source_url",
@@ -240,6 +272,7 @@ def prepare_release(
     min_words: int = 50,
     max_year: int = DEFAULT_MAX_YEAR,
     release_version: str = "1.0.0",
+    previous_version: str = "1.0.0-rc1",
     source_revision: str = "unresolved-local-input",
     actor: str = "local-user",
     run_id: str | None = None,
@@ -254,6 +287,11 @@ def prepare_release(
         raise CorpusError("minimum word count cannot be negative")
     if not SEMVER_PATTERN.fullmatch(release_version):
         raise CorpusError("release version must be semantic, for example 1.0.0")
+    previous_version_label = previous_version.removeprefix("v")
+    if not SEMVER_PATTERN.fullmatch(previous_version_label):
+        raise CorpusError("previous release version must be semantic, for example v1.0.0")
+    if previous_version_label == release_version:
+        raise CorpusError("previous release version must differ from the new release")
 
     observed_started_at = utc_now()
     run_id = run_id or f"local:{observed_started_at}"
@@ -328,6 +366,7 @@ def prepare_release(
         "pii_redactions": ["email", "pesel", "phone"],
         "minimum_word_count": min_words, "maximum_supported_year": max_year,
         "output_format": output_format,
+        "previous_release_version": previous_version,
     }
     version_material = {
         "object_id": OBJECT_ID, "source_archive_sha256": source_sha256,
@@ -342,6 +381,7 @@ def prepare_release(
     file_ev = evidence_id("file-digests", version_digest)
     pii_ev = evidence_id("pii-redactions", version_digest)
     term_ev = evidence_id("term-distribution", version_digest)
+    legal_ev = evidence_id("public-sector-reuse-legal-basis", version_digest)
     evidence = [
         {"id": record_ev, "run_id": run_id, "subject_version": version_uri,
          "observation_type": "dataset_record_counts", "payload": dict(counts)},
@@ -352,6 +392,16 @@ def prepare_release(
         {"id": term_ev, "run_id": run_id, "subject_version": version_uri,
          "observation_type": "records_by_parliamentary_term",
          "payload": dict(sorted(term_totals.items()))},
+        {"id": legal_ev, "run_id": run_id, "subject_version": version_uri,
+         "observation_type": "official_statutory_reuse_sources",
+         "payload": {
+             "source_attribution": "Kancelaria Sejmu RP — API Sejmu",
+             "source_url": "https://api.sejm.gov.pl/",
+             "license_id": OPEN_REUSE_LICENSE_ID,
+             "license_name": OPEN_REUSE_LICENSE_NAME,
+             "legal_basis": list(LEGAL_BASIS),
+             "limitations": list(REUSE_LIMITATIONS),
+         }},
     ]
     claims = [
         {"id": f"slayer://claim/speech-records-only@sha256:{version_digest[:20]}",
@@ -367,6 +417,19 @@ def prepare_release(
          "falsification_condition": "An identical reproduction run produces different output SHA-256 digests.",
          "scope": [version_uri, source_uri, protocol_uri],
          "supported_by": [file_ev], "asserted_by": actor},
+        {"id": f"slayer://claim/statutory-open-reuse@sha256:{version_digest[:20]}",
+         "statement": (
+             "The released corpus derives from official parliamentary records "
+             "available for statutory public-sector-information reuse, subject "
+             "to documented legal exceptions."
+         ),
+         "falsification_condition": (
+             "The source records are not official parliamentary materials, the "
+             "cited statutory provisions do not authorize the stated reuse, or "
+             "an applicable third-party, privacy, or provider restriction defeats it."
+         ),
+         "scope": [version_uri, source_uri],
+         "supported_by": [legal_ev], "asserted_by": actor},
     ]
     manifest: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -410,7 +473,7 @@ def prepare_release(
             {"source_version": version_uri, "predicate": "GENERATED_BY",
              "target_version": protocol_uri, "introduced_by_run": run_id},
             {"source_version": version_uri, "predicate": "SUPERSEDES",
-             "target_version": "hf://datasets/PiotrSty/sejm-speeches-corpus@1.0.0-rc1",
+             "target_version": f"hf://datasets/{OBJECT_NAME}@{previous_version}",
              "introduced_by_run": run_id},
         ],
         "evidence": evidence,
@@ -424,8 +487,19 @@ def prepare_release(
              "profile": SCHEMA_VERSION},
             {"type": "regression_tests", "value": "passed_before_run",
              "actor_id": actor, "suite": "tests.test_sejm_release_v2"},
-            {"type": "license_policy", "value": "unresolved", "actor_id": actor,
-             "note": "license: other; formal legal qualification remains pending"},
+            {"type": "license_policy", "value": "open_public_sector_reuse",
+             "actor_id": actor,
+             "license_id": OPEN_REUSE_LICENSE_ID,
+             "license_name": OPEN_REUSE_LICENSE_NAME,
+             "license_link": OPEN_DATA_ACT_URL,
+             "source_attribution": "Kancelaria Sejmu RP — https://api.sejm.gov.pl/",
+             "legal_basis": list(LEGAL_BASIS),
+             "supported_by": [legal_ev],
+             "limitations": list(REUSE_LIMITATIONS),
+             "note": (
+                 "Open reuse derives from Polish statutes, not from an asserted "
+                 "Creative Commons grant."
+             )},
             {"type": "contamination_policy", "value": "not_evaluated_for_release",
              "actor_id": actor,
              "note": "No claim of benchmark decontamination is made by this release."},
@@ -438,6 +512,7 @@ def prepare_release(
             f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/sejm-dataset-viewer-cast-error.json",
             f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/hugging-face-write-token-403.json",
             f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/hf-viewer-splits-row-count-contract.json",
+            f"github://PiotrStyla/Sejm@{git_commit}/docs/failures/sejm-statutory-open-reuse-misclassified.json",
         ],
     }
     manifest_path = metadata_dir / "release-manifest.json"
@@ -460,6 +535,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-words", type=int, default=50)
     parser.add_argument("--max-year", type=int, default=DEFAULT_MAX_YEAR)
     parser.add_argument("--release-version", default="1.0.0")
+    parser.add_argument("--previous-version", default="1.0.0-rc1")
     parser.add_argument("--source-revision", default="unresolved-local-input")
     parser.add_argument("--actor", default="local-user")
     parser.add_argument("--run-id")
@@ -476,7 +552,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             validation_ratio=args.validation_ratio, output_format=args.format,
             member=args.member, skip_invalid=args.skip_invalid,
             min_words=args.min_words, max_year=args.max_year,
-            release_version=args.release_version, source_revision=args.source_revision,
+            release_version=args.release_version, previous_version=args.previous_version,
+            source_revision=args.source_revision,
             actor=args.actor, run_id=args.run_id, git_commit=args.git_commit,
             workflow_ref=args.workflow_ref,
         )

@@ -84,7 +84,13 @@ class NormalizationTests(unittest.TestCase):
 
 
 class OntologyReleaseTests(unittest.TestCase):
-    def build_release(self, root: pathlib.Path) -> dict:
+    def build_release(
+        self,
+        root: pathlib.Path,
+        *,
+        release_version: str = "1.0.0",
+        previous_version: str = "1.0.0-rc1",
+    ) -> dict:
         archive_path = root / "speeches_corpus_all.zip"
         records = [sample_record(i, plural_term=i % 2 == 1) for i in range(30)]
         records.append(sample_record(0))
@@ -99,7 +105,8 @@ class OntologyReleaseTests(unittest.TestCase):
             root / "release",
             validation_ratio=0.25,
             output_format="jsonl",
-            release_version="1.0.0",
+            release_version=release_version,
+            previous_version=previous_version,
             source_revision="a" * 40,
             actor="github:test-actor",
             run_id="github-actions:123:attempt:1",
@@ -152,6 +159,74 @@ class OntologyReleaseTests(unittest.TestCase):
             manifest = self.build_release(pathlib.Path(temporary))
             predicates = {relation["predicate"] for relation in manifest["relations"]}
             self.assertEqual(predicates, {"DERIVED_FROM", "GENERATED_BY", "SUPERSEDES"})
+
+    def test_license_attestation_documents_statutory_open_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.build_release(pathlib.Path(temporary))
+            attestation = next(
+                item for item in manifest["attestations"]
+                if item["type"] == "license_policy"
+            )
+            self.assertEqual(attestation["value"], "open_public_sector_reuse")
+            self.assertEqual(attestation["license_id"], "other")
+            self.assertEqual(
+                attestation["license_name"],
+                "polish-public-sector-open-statutory-reuse",
+            )
+            self.assertTrue(attestation["license_link"].startswith("https://eli.gov.pl/"))
+            legal_evidence = next(
+                item for item in manifest["evidence"]
+                if item["observation_type"] == "official_statutory_reuse_sources"
+            )
+            self.assertEqual(attestation["supported_by"], [legal_evidence["id"]])
+            self.assertEqual(len(legal_evidence["payload"]["legal_basis"]), 3)
+            legal_claim = next(
+                item for item in manifest["claims"]
+                if "/statutory-open-reuse@" in item["id"]
+            )
+            self.assertEqual(legal_claim["supported_by"], [legal_evidence["id"]])
+            self.assertTrue(
+                any(
+                    reference.endswith(
+                        "/docs/failures/sejm-statutory-open-reuse-misclassified.json"
+                    )
+                    for reference in manifest["failure_objects"]
+                )
+            )
+
+    def test_lineage_supersedes_explicit_immutable_previous_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            manifest = self.build_release(
+                root, release_version="1.0.1", previous_version="v1.0.0"
+            )
+            supersedes = next(
+                item for item in manifest["relations"]
+                if item["predicate"] == "SUPERSEDES"
+            )
+            self.assertEqual(
+                supersedes["target_version"],
+                "hf://datasets/PiotrSty/sejm-speeches-corpus@v1.0.0",
+            )
+            self.assertEqual(
+                manifest["protocol"]["configuration"]["previous_release_version"],
+                "v1.0.0",
+            )
+            self.assertTrue(
+                (
+                    root / "release" / "metadata" / "releases"
+                    / "1.0.1" / "release-manifest.json"
+                ).is_file()
+            )
+
+    def test_previous_release_must_be_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(CorpusError, "must differ"):
+                self.build_release(
+                    pathlib.Path(temporary),
+                    release_version="1.0.1",
+                    previous_version="v1.0.1",
+                )
 
     def test_semver_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
