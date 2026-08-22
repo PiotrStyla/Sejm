@@ -1,0 +1,107 @@
+name: Contribute contemporary Sejm speeches to Polish DynaWord
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/contribute-sejm-dynaword.yml
+      - scripts/build_dynaword_sejm_api.py
+      - tests/test_dynaword_sejm_api.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contribute-sejm-dynaword
+  cancel-in-progress: false
+
+jobs:
+  contribute:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      SOURCE_REPOSITORY: PiotrSty/sejm-speeches-corpus
+      SOURCE_RELEASE: v1.0.1
+      TARGET_REPOSITORY: SlayerLab/polish-dynaword
+      CONTRIBUTION_ACTOR: github:${{ github.actor }}
+      CONTRIBUTION_RUN_ID: github-actions:${{ github.run_id }}:attempt:${{ github.run_attempt }}
+
+    steps:
+      - name: Check out the reviewed contributor implementation
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11.16"
+
+      - name: Install pinned contribution dependencies
+        run: >-
+          python -m pip install
+          'huggingface_hub[cli]==0.34.4'
+          'pyarrow==19.0.1'
+          'tiktoken==0.9.0'
+
+      - name: Run existing ontology and DynaWord contract tests
+        run: >-
+          python -m unittest -v
+          tests.test_sejm_release_v2
+          tests.test_dynaword_sejm_api
+
+      - name: Resolve immutable source and target revisions
+        id: revisions
+        run: >-
+          python -c "import os,re;from huggingface_hub import HfApi;
+          a=HfApi();s=a.dataset_info(os.environ['SOURCE_REPOSITORY'],revision=os.environ['SOURCE_RELEASE']).sha;
+          t=a.dataset_info(os.environ['TARGET_REPOSITORY']).sha;
+          assert re.fullmatch('[0-9a-f]{40}',s) and re.fullmatch('[0-9a-f]{40}',t);
+          f=open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8');
+          f.write('source_revision='+s+'\\n'+'target_revision='+t+'\\n');f.close();
+          print('Pinned source:',s,'Pinned target:',t)"
+
+      - name: Download both immutable Sejm corpus splits
+        run: >-
+          hf download "$SOURCE_REPOSITORY"
+          data/train.parquet data/validation.parquet
+          --repo-type dataset
+          --revision "${{ steps.revisions.outputs.source_revision }}"
+          --local-dir "$RUNNER_TEMP/sejm-source"
+
+      - name: Download immutable DynaWord source registry
+        run: >-
+          hf download "$TARGET_REPOSITORY" src/sources.py
+          --repo-type dataset
+          --revision "${{ steps.revisions.outputs.target_revision }}"
+          --local-dir "$RUNNER_TEMP/dynaword-base"
+
+      - name: Build validated source, attribution and ontology evidence
+        run: >-
+          python scripts/build_dynaword_sejm_api.py
+          --source-dir "$RUNNER_TEMP/sejm-source"
+          --target-registry "$RUNNER_TEMP/dynaword-base/src/sources.py"
+          --output "$RUNNER_TEMP/dynaword-contribution"
+          --source-revision "${{ steps.revisions.outputs.source_revision }}"
+          --target-revision "${{ steps.revisions.outputs.target_revision }}"
+          --actor "$CONTRIBUTION_ACTOR"
+          --run-id "$CONTRIBUTION_RUN_ID"
+          --git-commit "$GITHUB_SHA"
+          --tests-file tests/test_dynaword_sejm_api.py
+
+      - name: Run contributed contract tests against generated files
+        run: >-
+          python "$RUNNER_TEMP/dynaword-contribution/src/test_sejm_api_contract.py"
+
+      - name: Create Hugging Face dataset pull request
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          hf upload "$TARGET_REPOSITORY"
+          "$RUNNER_TEMP/dynaword-contribution" .
+          --repo-type dataset
+          --create-pr
+          --commit-message "Add source: sejm_api — contemporary parliamentary speeches (2023 onward)"
+          --commit-description "Adds immutable-source-backed Sejm API speeches after existing parliamentary and ParlaMint coverage, complete speaker attribution, canonical DynaWord Parquet schema, per-record provenance, statutory legal evidence, Slayer ontology manifest and contract tests."
