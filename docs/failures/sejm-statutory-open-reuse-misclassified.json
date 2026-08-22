@@ -1,0 +1,19 @@
+{
+  "id": "slayer://failure/sejm-statutory-open-reuse-misclassified",
+  "kind": "legal-provenance-misclassification",
+  "status": "resolved",
+  "affected_release": "hf://datasets/PiotrSty/sejm-speeches-corpus@v1.0.0",
+  "symptom": "The license-policy attestation reported unresolved despite documented statutory reuse of official parliamentary materials.",
+  "root_cause": "The absence of a named Creative Commons or SPDX license was incorrectly treated as absence of a verifiable legal basis for reusing public-sector information.",
+  "resolution": "Publish a new immutable release with cited statutory evidence, a falsifiable legal claim, a documented license-policy attestation, source attribution and a repository LICENSE file.",
+  "evidence": [
+    "https://api.sejm.gov.pl/sejm.html",
+    "https://eli.gov.pl/api/acts/DU/2025/24/text/O/D20250024.pdf",
+    "https://eli.gov.pl/api/acts/DU/2023/1524/text.html"
+  ],
+  "regression_tests": [
+    "tests.test_sejm_release_v2.OntologyReleaseTests.test_license_attestation_documents_statutory_open_reuse",
+    "tests.test_sejm_release_v2.OntologyReleaseTests.test_lineage_supersedes_explicit_immutable_previous_release"
+  ],
+  "prevention": "Treat named-license metadata and statutory permission as distinct evidence; require official legal sources, explicit limitations and preserved immutable release lineage."
+}
