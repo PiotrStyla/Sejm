@@ -17,11 +17,14 @@ The GitHub Actions workflow writes only to
 `PiotrSty/sejm-committee-transcripts`. It does not modify SlayerLab, open a
 Hugging Face pull request, or expose the existing `HF_TOKEN` secret.
 
-The original dataset revision is pinned before download and included in every
-corrected record and the ontology manifest. The old Parquet file is replaced at
-its existing path; README, legal evidence and audit artifacts are committed in
-the same Hugging Face revision. Earlier versions remain recoverable through
-Hugging Face repository history.
+The original dataset revision and the Dataset Viewer conversion revision are
+pinned before download. The original revision is included in every corrected
+record and the ontology manifest. The source repository does not contain a
+Parquet file on its main branch, so the repaired data is written to a new
+canonical `data/train.parquet` path. Dataset-card `configs.data_files`
+explicitly select that path while preserving all original repository files.
+README, legal evidence and audit artifacts are committed in the same Hugging
+Face revision. Earlier versions remain recoverable through repository history.
 
 ## Quality contract
 

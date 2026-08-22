@@ -216,6 +216,11 @@ language:
 license: other
 license_name: polish-public-sector-open-statutory-reuse
 license_link: LICENSE.md
+configs:
+- config_name: default
+  data_files:
+  - split: train
+    path: data/train.parquet
 task_categories:
 - text-generation
 tags:
