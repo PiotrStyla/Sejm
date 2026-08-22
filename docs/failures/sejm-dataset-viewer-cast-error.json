@@ -1,0 +1,19 @@
+{
+  "schema_version": "slayer.ai/failure/v1",
+  "id": "slayer://failure/sejm-dataset-viewer-cast-error",
+  "kind": "failure",
+  "status": "resolved",
+  "symptom": "Hugging Face Dataset Viewer raised CastError for term versus terms.",
+  "root_cause": "Root-level corpus_summary JSON files were auto-discovered as dataset rows while the speech corpus remained inside a ZIP; summary schemas differed.",
+  "resolution": "Publish explicit data/train.parquet and data/validation.parquet paths in the dataset card and keep summary JSON outside declared splits.",
+  "regression_tests": [
+    "test_summary_rows_are_rejected",
+    "test_plural_term_becomes_canonical_singular",
+    "test_release_ignores_summary_and_deduplicates",
+    "test_dataset_viewer_payload_validation"
+  ],
+  "evidence": {
+    "resolved_by_github_run": "32579221466",
+    "viewer_splits_verified": ["train", "validation"]
+  }
+}
